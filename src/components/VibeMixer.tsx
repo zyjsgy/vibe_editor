@@ -58,7 +58,7 @@ export const VibeMixer: React.FC<{ isVisible: boolean }> = ({ isVisible }) => {
     }
   };
 
-  const defaultBg1Url = 'https://raw.githubusercontent.com/zyjsgy/vibe_editor/main/public/1.png';
+  const defaultBg1Url = 'https://raw.githubusercontent.com/zyjsgy/image_store/main/1.png';
   const defaultBg2Url = 'https://images.unsplash.com/photo-1454496522488-7a8e488e8606?auto=format&fit=crop&w=1920&q=80';
 
   return (
