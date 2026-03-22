@@ -1,0 +1,5 @@
+{
+  "name": "Cyber Zen Vibe Editor",
+  "description": "An immersive, minimalist text editor with WebGL dynamic backgrounds (Rain/Snow), ambient noise, and a Zen timer.",
+  "requestFramePermissions": []
+}
