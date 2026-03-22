@@ -302,10 +302,10 @@ export const Background: React.FC = () => {
     img.crossOrigin = "anonymous";
     
     const currentBgUrl = bgImage === 'default1' 
-      ? '/default-bg1.png'
+      ? 'https://raw.githubusercontent.com/zyjsgy/vibe_editor/main/public/1.png'
       : bgImage === 'default2'
       ? 'https://images.unsplash.com/photo-1454496522488-7a8e488e8606?auto=format&fit=crop&w=1920&q=80'
-      : customImages.find(img => img.id === bgImage)?.url || '/default-bg1.png';
+      : customImages.find(img => img.id === bgImage)?.url || 'https://raw.githubusercontent.com/zyjsgy/vibe_editor/main/public/1.png';
       
     img.src = currentBgUrl;
     
@@ -323,7 +323,7 @@ export const Background: React.FC = () => {
       console.error("Failed to load background image, falling back to default:", err);
       const fallbackImg = new Image();
       fallbackImg.crossOrigin = "anonymous";
-      fallbackImg.src = "/default-bg1.png";
+      fallbackImg.src = "https://raw.githubusercontent.com/zyjsgy/vibe_editor/main/public/1.png";
       fallbackImg.onload = () => {
         imageResRef.current = { w: fallbackImg.width, h: fallbackImg.height };
         gl.bindTexture(gl.TEXTURE_2D, texture);
