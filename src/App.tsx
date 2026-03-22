@@ -11,12 +11,13 @@ import { VibeMixer } from './components/VibeMixer';
 import { ZenTimer } from './components/ZenTimer';
 import { AudioPlayer } from './components/AudioPlayer';
 import { useFileSystem } from './hooks/useFileSystem';
-import { FolderOpen, FileText, Plus, X } from 'lucide-react';
+import { FolderOpen, FileText, Plus, X, Maximize, Minimize } from 'lucide-react';
 
 function AppContent() {
   const [uiVisible, setUiVisible] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [initialContent, setInitialContent] = useState<string | undefined>(undefined);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   
   const { 
     files, 
@@ -28,6 +29,11 @@ function AppContent() {
   } = useFileSystem();
 
   useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    
     let timeout: number;
     
     const handleActivity = () => {
@@ -43,12 +49,27 @@ function AppContent() {
     timeout = window.setTimeout(() => setUiVisible(false), 3000);
 
     return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
       window.removeEventListener('mousemove', handleActivity);
       window.removeEventListener('keydown', handleActivity);
       window.removeEventListener('click', handleActivity);
       clearTimeout(timeout);
     };
   }, []);
+
+  const toggleFullscreen = async () => {
+    if (!document.fullscreenElement) {
+      try {
+        await document.documentElement.requestFullscreen();
+      } catch (err) {
+        console.error("Error attempting to enable fullscreen:", err);
+      }
+    } else {
+      if (document.exitFullscreen) {
+        await document.exitFullscreen();
+      }
+    }
+  };
 
   const handleOpenFile = async (fileItem: any) => {
     const text = await readFile(fileItem);
@@ -79,6 +100,15 @@ function AppContent() {
         className={`absolute top-6 left-6 z-40 p-3 rounded-full bg-white/5 backdrop-blur-md border border-white/10 text-white/50 hover:text-white hover:bg-white/10 transition-all duration-500 ${uiVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
       >
         <FolderOpen size={20} />
+      </button>
+
+      {/* Top Right Fullscreen Button */}
+      <button
+        onClick={toggleFullscreen}
+        className={`absolute top-6 right-6 z-40 p-3 rounded-full bg-white/5 backdrop-blur-md border border-white/10 text-white/50 hover:text-white hover:bg-white/10 transition-all duration-500 ${uiVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+      >
+        {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
       </button>
 
       {/* Sidebar */}
