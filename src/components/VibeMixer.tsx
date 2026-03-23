@@ -49,7 +49,7 @@ export const VibeMixer: React.FC<{ isVisible: boolean }> = ({ isVisible }) => {
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (customImages.length >= 3) {
-      alert('最多只能上传3张自定义背景图片。');
+      console.warn('最多只能上传3张自定义背景图片。');
       return;
     }
     const file = e.target.files?.[0];
@@ -62,16 +62,23 @@ export const VibeMixer: React.FC<{ isVisible: boolean }> = ({ isVisible }) => {
   const defaultBg2Url = 'https://images.unsplash.com/photo-1454496522488-7a8e488e8606?auto=format&fit=crop&w=1920&q=80';
 
   return (
-    <div
-      className={`absolute bottom-5 sm:bottom-6 right-5 sm:right-6 transition-opacity duration-1000 z-50 ${
-        isVisible || isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
-      }`}
-    >
+    <>
+      {isOpen && (
+        <div 
+          className="fixed inset-0 z-40"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+      <div
+        className={`absolute bottom-5 sm:bottom-6 right-5 sm:right-6 transition-opacity duration-1000 z-50 ${
+          isVisible || isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+      >
       {isOpen && (
         <div className="mb-4 p-6 bg-black/40 backdrop-blur-xl rounded-2xl border border-white/10 w-80 text-white/90 shadow-2xl max-h-[80vh] overflow-y-auto custom-scrollbar font-serif">
           <div className="space-y-6">
             <div className="space-y-4">
-              <label className="block text-[clamp(10px,1.5vw,12px)] uppercase tracking-wider text-white/50 mb-3">背景</label>
+              <label className="block text-[clamp(10px,1.5vw,12px)] uppercase tracking-wider text-white/50 mb-3 font-serif">背景</label>
               <div className="flex flex-nowrap gap-2 overflow-x-auto pb-2 custom-scrollbar">
                 <button 
                   onClick={() => setBgImage('default1')} 
@@ -107,7 +114,7 @@ export const VibeMixer: React.FC<{ isVisible: boolean }> = ({ isVisible }) => {
               </div>
             </div>
 
-            <div className="pt-4 border-t border-white/10 space-y-4">
+            <div className="pt-4 border-t border-white/10 space-y-2">
               <Slider label="密度" value={intensity} onChange={setIntensity} />
               <Slider label="速度" value={speed} onChange={setSpeed} min={0.1} max={3} step={0.1} formatValue={(v) => `${v.toFixed(1)}x`} />
               <Slider label="模糊" value={blur} onChange={setBlur} />
@@ -115,19 +122,19 @@ export const VibeMixer: React.FC<{ isVisible: boolean }> = ({ isVisible }) => {
             </div>
             
             <div className="pt-4 border-t border-white/10">
-              <label className="block text-[clamp(10px,1.5vw,12px)] uppercase tracking-wider text-white/50 mb-3">字体</label>
+              <label className="block text-[clamp(10px,1.5vw,12px)] uppercase tracking-wider text-white/50 mb-3 font-serif">字体</label>
               <div className="flex flex-nowrap gap-1">
                 {(['font-sans', 'font-serif', 'font-mono', 'font-fangsong'] as Font[]).map(f => (
                   <button
                     key={f}
                     onClick={() => setFont(f)}
-                    className={`flex-1 py-1.5 text-[clamp(10px,1.5vw,14px)] rounded-lg border transition-colors ${
+                    className={`flex-1 py-1.5 text-[clamp(10px,1.5vw,14px)] rounded-lg border transition-colors font-serif ${
                       font === f 
                         ? 'bg-white/20 border-white/30 text-white' 
                         : 'bg-transparent border-white/10 text-white/50 hover:bg-white/10'
                     }`}
                   >
-                    {f === 'font-fangsong' ? 'FangSong' : f.split('-')[1].charAt(0).toUpperCase() + f.split('-')[1].slice(1)}
+                    {f === 'font-fangsong' ? '仿宋' : f.split('-')[1].charAt(0).toUpperCase() + f.split('-')[1].slice(1)}
                   </button>
                 ))}
               </div>
@@ -135,7 +142,7 @@ export const VibeMixer: React.FC<{ isVisible: boolean }> = ({ isVisible }) => {
 
             <button
               onClick={handleExport}
-              className="w-full flex items-center justify-center gap-2 py-3 mt-4 bg-white/10 hover:bg-white/20 transition-colors rounded-xl text-[clamp(12px,2vw,16px)] font-medium border border-white/5"
+              className="w-full flex items-center justify-center gap-2 py-3 mt-4 bg-white/10 hover:bg-white/20 transition-colors rounded-xl text-[clamp(12px,2vw,16px)] font-medium border border-white/5 font-serif"
             >
               <Download size={16} />
               Export .txt
@@ -151,6 +158,7 @@ export const VibeMixer: React.FC<{ isVisible: boolean }> = ({ isVisible }) => {
         <Settings size={18} />
       </button>
     </div>
+    </>
   );
 };
 
@@ -171,8 +179,8 @@ const Slider = ({
   step?: number,
   formatValue?: (v: number) => string
 }) => (
-  <div className="space-y-1">
-    <div className="flex justify-between text-[clamp(10px,1.5vw,12px)] text-white/60">
+  <div className="space-y-0.5">
+    <div className="flex justify-between text-[clamp(10px,1.5vw,12px)] text-white/60 font-serif">
       <span>{label}</span>
       <span>{formatValue(value)}</span>
     </div>

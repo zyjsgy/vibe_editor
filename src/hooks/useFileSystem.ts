@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useVibe } from '../store/VibeContext';
 import { db } from '../firebase';
-import { collection, doc, setDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
 
 export interface FileItem {
   id: string;
   name: string;
   content: string;
+  type?: 'file' | 'folder';
+  parentId?: string | null;
   uid: string;
   createdAt: number;
   updatedAt: number;
@@ -24,7 +26,7 @@ export function useFileSystem() {
       return;
     }
 
-    const q = query(collection(db, `users/${user.uid}/files`), orderBy('updatedAt', 'desc'));
+    const q = query(collection(db, `users/${user.uid}/files`), orderBy('createdAt', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const newFiles: FileItem[] = [];
       snapshot.forEach((doc) => {
@@ -58,67 +60,54 @@ export function useFileSystem() {
   const saveFile = async (content: string, fileItem?: FileItem | null) => {
     const target = fileItem || currentFile;
     
-    if (!user) {
-      fallbackDownload(content);
+    if (!user || !target) {
       return;
     }
 
-    if (target) {
-      try {
-        const docRef = doc(db, `users/${user.uid}/files/${target.id}`);
-        await setDoc(docRef, {
-          content,
-          updatedAt: Date.now()
-        }, { merge: true });
-        
-        // Update local state immediately for snappy UI
-        setCurrentFile(prev => prev ? { ...prev, content, updatedAt: Date.now() } : null);
-      } catch (e: any) {
-        console.error("Firestore Error: ", JSON.stringify({
-          error: e.message,
-          operationType: 'update',
-          path: `users/${user.uid}/files/${target.id}`,
-          authInfo: { userId: user.uid }
-        }));
-        fallbackDownload(content);
-      }
-    } else {
-      fallbackDownload(content);
+    try {
+      const docRef = doc(db, `users/${user.uid}/files/${target.id}`);
+      await setDoc(docRef, {
+        content,
+        updatedAt: Date.now()
+      }, { merge: true });
+      
+      // Update local state immediately for snappy UI
+      setCurrentFile(prev => prev ? { ...prev, content, updatedAt: Date.now() } : null);
+    } catch (e: any) {
+      console.error("Firestore Error: ", JSON.stringify({
+        error: e.message,
+        operationType: 'update',
+        path: `users/${user.uid}/files/${target.id}`,
+        authInfo: { userId: user.uid }
+      }));
     }
   };
 
-  const fallbackDownload = (content: string) => {
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'untitled.txt';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const createFile = async (name: string) => {
+  const createItem = async (name: string, type: 'file' | 'folder' = 'file', parentId: string | null = null, initialContent: string = '') => {
     if (!user) {
       console.warn('Please login to create cloud files.');
       return null;
     }
     
     try {
-      const fileName = name.endsWith('.txt') ? name : `${name}.txt`;
       const newDocRef = doc(collection(db, `users/${user.uid}/files`));
       
-      const newFile = {
-        name: fileName,
-        content: '',
+      const newItemData = {
+        name: name,
+        content: initialContent,
+        type,
+        parentId,
         uid: user.uid,
         createdAt: Date.now(),
         updatedAt: Date.now()
       };
       
-      await setDoc(newDocRef, newFile);
+      await setDoc(newDocRef, newItemData);
       
-      const newItem = { id: newDocRef.id, ...newFile };
-      setCurrentFile(newItem);
+      const newItem = { id: newDocRef.id, ...newItemData };
+      if (type === 'file') {
+        setCurrentFile(newItem);
+      }
       return newItem;
     } catch (e: any) {
       console.error("Firestore Error: ", JSON.stringify({
@@ -131,5 +120,52 @@ export function useFileSystem() {
     }
   };
 
-  return { files, currentFile, readFile, saveFile, createFile, setCurrentFile };
+  const deleteItem = async (id: string) => {
+    if (!user) return;
+    try {
+      const getDescendants = (parentId: string): string[] => {
+        const children = files.filter(f => f.parentId === parentId).map(f => f.id);
+        let allDescendants = [...children];
+        for (const child of children) {
+          allDescendants = [...allDescendants, ...getDescendants(child)];
+        }
+        return allDescendants;
+      };
+
+      const idsToDelete = [id, ...getDescendants(id)];
+
+      for (const deleteId of idsToDelete) {
+        await deleteDoc(doc(db, `users/${user.uid}/files/${deleteId}`));
+        if (currentFile?.id === deleteId) {
+          setCurrentFile(null);
+        }
+      }
+    } catch (e: any) {
+      console.error("Firestore Error: ", JSON.stringify({
+        error: e.message,
+        operationType: 'delete',
+        path: `users/${user.uid}/files/${id}`,
+        authInfo: { userId: user.uid }
+      }));
+    }
+  };
+
+  const moveItem = async (itemId: string, newParentId: string) => {
+    if (!user) return;
+    try {
+      await setDoc(doc(db, `users/${user.uid}/files/${itemId}`), {
+        parentId: newParentId,
+        updatedAt: Date.now()
+      }, { merge: true });
+    } catch (e: any) {
+      console.error("Firestore Error: ", JSON.stringify({
+        error: e.message,
+        operationType: 'update',
+        path: `users/${user.uid}/files/${itemId}`,
+        authInfo: { userId: user.uid }
+      }));
+    }
+  };
+
+  return { files, currentFile, readFile, saveFile, createItem, deleteItem, moveItem, setCurrentFile };
 }

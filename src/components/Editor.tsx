@@ -90,32 +90,29 @@ export const Editor: React.FC<{
     }
   };
 
-  const handleSave = () => {
-    if (editorRef.current) {
-      const bodyText = editorRef.current.innerText;
-      const content = title ? `${title}\n\n${bodyText}` : bodyText;
-      if (onSave) {
+  // Auto-save effect
+  useEffect(() => {
+    if (!onSave) return;
+    
+    const timeoutId = setTimeout(() => {
+      if (editorRef.current) {
+        const bodyText = editorRef.current.innerText;
+        const content = title ? `${title}\n\n${bodyText}` : bodyText;
         onSave(content);
-      } else {
-        // Fallback download if no file system hooked up
-        const blob = new Blob([content], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = (title || 'zen-notes') + '.txt';
-        a.click();
-        URL.revokeObjectURL(url);
       }
-    }
-  };
+    }, 1500); // 1.5 second debounce
+    
+    return () => clearTimeout(timeoutId);
+  }, [text, title, onSave]);
 
   const handleDelete = () => {
     setIsDeleting(true);
     setTimeout(() => {
       if (editorRef.current) {
         editorRef.current.innerHTML = '';
-        setTitle('');
-        setText('');
+        // Only clear the body content, preserve the title
+        const fullContent = title ? `<h1>${title}</h1>` : '';
+        setText(fullContent);
         updateCounts();
       }
       setIsDeleting(false);
@@ -230,7 +227,7 @@ export const Editor: React.FC<{
             placeholder="Title"
             className={`w-full bg-transparent outline-none mb-4 font-bold ${font} text-[clamp(12px,2vw,16px)] transition-all duration-300 ${
               isVisible ? 'text-white/90' : 'text-white/20'
-            } ${isDeleting ? 'animate-fog-fade' : ''}`}
+            }`}
           />
           <div
             ref={editorRef}
@@ -246,15 +243,14 @@ export const Editor: React.FC<{
           />
         </div>
 
-        <div className={`absolute bottom-2 left-6 sm:bottom-3 sm:left-8 text-white/20 text-[clamp(8px,1.5vw,12px)] font-sans tracking-widest pointer-events-none transition-opacity duration-500 ${isVisible ? 'opacity-100' : 'opacity-0'} ${isDeleting ? 'animate-fog-fade' : ''}`}>
+        <div className={`absolute bottom-2 right-6 sm:bottom-3 sm:right-8 text-white/20 text-[clamp(6px,1vw,9px)] font-sans tracking-widest pointer-events-none transition-opacity duration-500 ${isVisible ? 'opacity-100' : 'opacity-0'} ${isDeleting ? 'animate-fog-fade' : ''}`}>
           {wordCount} WORDS
         </div>
       </div>
 
       <div className="w-[95%] sm:w-[90%] md:w-[85%] lg:w-[80%] max-w-5xl px-2 sm:px-4 mt-3 sm:mt-4 flex justify-start pointer-events-none">
         <div className={`flex gap-6 text-[clamp(10px,1.5vw,14px)] font-sans tracking-widest font-medium pointer-events-auto transition-opacity duration-500 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
-          <button onClick={handleSave} className="text-white/50 hover:text-white transition-colors uppercase">SAVE</button>
-          <button onClick={handleDelete} className="text-white/50 hover:text-white transition-colors uppercase">DELETE</button>
+          <button onClick={handleDelete} className="text-white/50 hover:text-white transition-colors uppercase">CLEAR</button>
         </div>
       </div>
     </div>
