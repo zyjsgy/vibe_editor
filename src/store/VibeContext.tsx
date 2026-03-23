@@ -1,5 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { getImages, saveImage, deleteImage } from '../utils/db';
+import { auth, db } from '../firebase';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
 
 export type Mode = 'rain' | 'snow';
 export type Font = 'font-sans' | 'font-serif' | 'font-mono' | 'font-fangsong';
@@ -33,6 +36,7 @@ interface VibeState {
   customImages: CustomImage[];
   addCustomImage: (file: File) => Promise<void>;
   removeCustomImage: (id: string) => Promise<void>;
+  user: User | null;
 }
 
 const VibeContext = createContext<VibeState | undefined>(undefined);
@@ -49,6 +53,20 @@ export const VibeProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [bgImage, setBgImage] = useState<string>('default1');
   const [bgDimness, setBgDimness] = useState<number>(0.4);
   const [customImages, setCustomImages] = useState<CustomImage[]>([]);
+  
+  const [user, setUser] = useState<User | null>(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+  const isRemoteUpdate = useRef(false);
+  const isInitialized = useRef(false);
+
+  // Auth listener
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setIsAuthReady(true);
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Load from localStorage and IndexedDB on mount
   useEffect(() => {
@@ -80,13 +98,75 @@ export const VibeProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }));
       setCustomImages(loaded);
     }).catch(err => console.error("Failed to load custom images", err));
+    
+    isInitialized.current = true;
   }, []);
 
-  // Save to localStorage on change
+  // Sync from Firestore
   useEffect(() => {
+    if (!isAuthReady || !user) return;
+
+    const docRef = doc(db, `users/${user.uid}/settings/vibe`);
+    
+    // First check if document exists, if not, create it with current local state
+    getDoc(docRef).then((snapshot) => {
+      if (!snapshot.exists()) {
+        const data = { mode, text, font, intensity, speed, blur, noiseVolume, musicVolume, bgImage, bgDimness, uid: user.uid };
+        setDoc(docRef, data).catch(err => console.error("Error creating initial settings:", err));
+      }
+    });
+
+    const unsubscribe = onSnapshot(docRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        isRemoteUpdate.current = true;
+        if (data.mode) setMode(data.mode);
+        if (data.text !== undefined) setText(data.text);
+        if (data.font) setFont(data.font);
+        if (data.intensity !== undefined) setIntensity(data.intensity);
+        if (data.speed !== undefined) setSpeed(data.speed);
+        if (data.blur !== undefined) setBlur(data.blur);
+        if (data.noiseVolume !== undefined) setNoiseVolume(data.noiseVolume);
+        if (data.musicVolume !== undefined) setMusicVolume(data.musicVolume);
+        if (data.bgImage) setBgImage(data.bgImage);
+        if (data.bgDimness !== undefined) setBgDimness(data.bgDimness);
+        
+        // Reset the flag after a short delay to allow state updates to process
+        setTimeout(() => {
+          isRemoteUpdate.current = false;
+        }, 100);
+      }
+    }, (error) => {
+      console.error("Firestore Error: ", JSON.stringify({
+        error: error.message,
+        operationType: 'get',
+        path: `users/${user.uid}/settings/vibe`,
+        authInfo: { userId: user.uid }
+      }));
+    });
+
+    return () => unsubscribe();
+  }, [user, isAuthReady]);
+
+  // Save to localStorage and Firestore on change
+  useEffect(() => {
+    if (!isInitialized.current) return;
+    
     const data = { mode, text, font, intensity, speed, blur, noiseVolume, musicVolume, bgImage, bgDimness };
     localStorage.setItem('cyber-zen-vibe', JSON.stringify(data));
-  }, [mode, text, font, intensity, speed, blur, noiseVolume, musicVolume, bgImage, bgDimness]);
+    
+    if (user && isAuthReady && !isRemoteUpdate.current) {
+      const docRef = doc(db, `users/${user.uid}/settings/vibe`);
+      setDoc(docRef, { ...data, uid: user.uid }, { merge: true }).catch(error => {
+        console.error("Firestore Error: ", JSON.stringify({
+          error: error.message,
+          operationType: 'write',
+          path: `users/${user.uid}/settings/vibe`,
+          authInfo: { userId: user.uid }
+        }));
+      });
+    }
+  }, [mode, text, font, intensity, speed, blur, noiseVolume, musicVolume, bgImage, bgDimness, user, isAuthReady]);
 
   const addCustomImage = async (file: File) => {
     if (customImages.length >= 3) return;
@@ -101,7 +181,6 @@ export const VibeProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     await deleteImage(id);
     setCustomImages(prev => {
       const filtered = prev.filter(img => img.id !== id);
-      // Revoke the object URL to free memory
       const imgToRemove = prev.find(img => img.id === id);
       if (imgToRemove) URL.revokeObjectURL(imgToRemove.url);
       return filtered;
@@ -122,7 +201,8 @@ export const VibeProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         musicVolume, setMusicVolume,
         bgImage, setBgImage,
         bgDimness, setBgDimness,
-        customImages, addCustomImage, removeCustomImage
+        customImages, addCustomImage, removeCustomImage,
+        user
       }}
     >
       {children}

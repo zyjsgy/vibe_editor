@@ -1,55 +1,85 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useVibe } from '../store/VibeContext';
+import { db } from '../firebase';
+import { collection, doc, setDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
 
 export interface FileItem {
-  handle: FileSystemFileHandle;
+  id: string;
   name: string;
+  content: string;
+  uid: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export function useFileSystem() {
-  const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
+  const { user } = useVibe();
   const [files, setFiles] = useState<FileItem[]>([]);
   const [currentFile, setCurrentFile] = useState<FileItem | null>(null);
 
-  const openDirectory = async () => {
-    try {
-      if (!('showDirectoryPicker' in window)) {
-        alert('Your browser does not support the File System Access API. Please use Chrome or Edge.');
-        return;
-      }
-      const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
-      setDirHandle(handle);
-      await refreshFiles(handle);
-    } catch (e) {
-      console.error(e);
+  useEffect(() => {
+    if (!user) {
+      setFiles([]);
+      setCurrentFile(null);
+      return;
     }
-  };
 
-  const refreshFiles = async (handle: FileSystemDirectoryHandle) => {
-    const newFiles: FileItem[] = [];
-    for await (const entry of handle.values()) {
-      if (entry.kind === 'file' && entry.name.endsWith('.txt')) {
-        newFiles.push({ handle: entry, name: entry.name });
-      }
-    }
-    setFiles(newFiles);
-  };
+    const q = query(collection(db, `users/${user.uid}/files`), orderBy('updatedAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const newFiles: FileItem[] = [];
+      snapshot.forEach((doc) => {
+        newFiles.push({ id: doc.id, ...doc.data() } as FileItem);
+      });
+      setFiles(newFiles);
+      
+      // Update current file if it was modified remotely
+      setCurrentFile(prev => {
+        if (!prev) return null;
+        const updated = newFiles.find(f => f.id === prev.id);
+        return updated || prev;
+      });
+    }, (error) => {
+      console.error("Firestore Error: ", JSON.stringify({
+        error: error.message,
+        operationType: 'list',
+        path: `users/${user.uid}/files`,
+        authInfo: { userId: user.uid }
+      }));
+    });
+
+    return () => unsubscribe();
+  }, [user]);
 
   const readFile = async (fileItem: FileItem) => {
-    const file = await fileItem.handle.getFile();
-    const text = await file.text();
     setCurrentFile(fileItem);
-    return text;
+    return fileItem.content;
   };
 
   const saveFile = async (content: string, fileItem?: FileItem | null) => {
     const target = fileItem || currentFile;
+    
+    if (!user) {
+      fallbackDownload(content);
+      return;
+    }
+
     if (target) {
       try {
-        const writable = await target.handle.createWritable();
-        await writable.write(content);
-        await writable.close();
-      } catch (e) {
-        console.error('Failed to save file', e);
+        const docRef = doc(db, `users/${user.uid}/files/${target.id}`);
+        await setDoc(docRef, {
+          content,
+          updatedAt: Date.now()
+        }, { merge: true });
+        
+        // Update local state immediately for snappy UI
+        setCurrentFile(prev => prev ? { ...prev, content, updatedAt: Date.now() } : null);
+      } catch (e: any) {
+        console.error("Firestore Error: ", JSON.stringify({
+          error: e.message,
+          operationType: 'update',
+          path: `users/${user.uid}/files/${target.id}`,
+          authInfo: { userId: user.uid }
+        }));
         fallbackDownload(content);
       }
     } else {
@@ -68,19 +98,38 @@ export function useFileSystem() {
   };
 
   const createFile = async (name: string) => {
-    if (!dirHandle) return null;
+    if (!user) {
+      console.warn('Please login to create cloud files.');
+      return null;
+    }
+    
     try {
       const fileName = name.endsWith('.txt') ? name : `${name}.txt`;
-      const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
-      await refreshFiles(dirHandle);
-      const newItem = { handle: fileHandle, name: fileHandle.name };
+      const newDocRef = doc(collection(db, `users/${user.uid}/files`));
+      
+      const newFile = {
+        name: fileName,
+        content: '',
+        uid: user.uid,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+      
+      await setDoc(newDocRef, newFile);
+      
+      const newItem = { id: newDocRef.id, ...newFile };
       setCurrentFile(newItem);
       return newItem;
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      console.error("Firestore Error: ", JSON.stringify({
+        error: e.message,
+        operationType: 'create',
+        path: `users/${user.uid}/files`,
+        authInfo: { userId: user.uid }
+      }));
       return null;
     }
   };
 
-  return { dirHandle, files, currentFile, openDirectory, readFile, saveFile, createFile, setCurrentFile };
+  return { files, currentFile, readFile, saveFile, createFile, setCurrentFile };
 }

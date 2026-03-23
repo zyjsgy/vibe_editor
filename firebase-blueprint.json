@@ -1,0 +1,46 @@
+{
+  "entities": {
+    "VibeSettings": {
+      "title": "VibeSettings",
+      "description": "User's vibe editor settings",
+      "type": "object",
+      "properties": {
+        "mode": { "type": "string" },
+        "text": { "type": "string" },
+        "font": { "type": "string" },
+        "intensity": { "type": "number" },
+        "speed": { "type": "number" },
+        "blur": { "type": "number" },
+        "noiseVolume": { "type": "number" },
+        "musicVolume": { "type": "number" },
+        "bgImage": { "type": "string" },
+        "bgDimness": { "type": "number" },
+        "uid": { "type": "string" }
+      },
+      "required": ["uid"]
+    },
+    "UserFile": {
+      "title": "UserFile",
+      "description": "A text file created by the user",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "content": { "type": "string" },
+        "uid": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["name", "content", "uid", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}/settings/vibe": {
+      "schema": "VibeSettings",
+      "description": "User's vibe settings"
+    },
+    "users/{userId}/files/{fileId}": {
+      "schema": "UserFile",
+      "description": "User's files"
+    }
+  }
+}

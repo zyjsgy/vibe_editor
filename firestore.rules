@@ -1,0 +1,89 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users/{userId}/settings/vibe
+    // Document ID: vibe
+    // Fields:
+    //   - mode: string
+    //   - text: string
+    //   - font: string
+    //   - intensity: number
+    //   - speed: number
+    //   - blur: number
+    //   - noiseVolume: number
+    //   - musicVolume: number
+    //   - bgImage: string
+    //   - bgDimness: number
+    //   - uid: string
+    //
+    // Collection: users/{userId}/files/{fileId}
+    // Document ID: auto-generated
+    // Fields:
+    //   - name: string
+    //   - content: string
+    //   - uid: string
+    //   - createdAt: number
+    //   - updatedAt: number
+    //
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function uidUnchanged() {
+      return !('uid' in request.resource.data) ||
+        request.resource.data.uid == request.auth.uid;
+    }
+    
+    function uidNotModified() {
+      return !('uid' in request.resource.data) ||
+        request.resource.data.uid == resource.data.uid;
+    }
+
+    function isValidVibeSettings() {
+      return request.resource.data.keys().hasAll(['uid']) &&
+             (!('mode' in request.resource.data) || request.resource.data.mode is string) &&
+             (!('text' in request.resource.data) || request.resource.data.text is string) &&
+             (!('font' in request.resource.data) || request.resource.data.font is string) &&
+             (!('intensity' in request.resource.data) || request.resource.data.intensity is number) &&
+             (!('speed' in request.resource.data) || request.resource.data.speed is number) &&
+             (!('blur' in request.resource.data) || request.resource.data.blur is number) &&
+             (!('noiseVolume' in request.resource.data) || request.resource.data.noiseVolume is number) &&
+             (!('musicVolume' in request.resource.data) || request.resource.data.musicVolume is number) &&
+             (!('bgImage' in request.resource.data) || request.resource.data.bgImage is string) &&
+             (!('bgDimness' in request.resource.data) || request.resource.data.bgDimness is number);
+    }
+
+    function isValidUserFile() {
+      return request.resource.data.keys().hasAll(['name', 'content', 'uid', 'createdAt', 'updatedAt']) &&
+             request.resource.data.name is string && request.resource.data.name.size() < 200 &&
+             request.resource.data.content is string && request.resource.data.content.size() < 500000 &&
+             request.resource.data.createdAt is number &&
+             request.resource.data.updatedAt is number;
+    }
+
+    match /users/{userId}/settings/{document=**} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidVibeSettings() && uidUnchanged();
+      allow update: if isOwner(userId) && isValidVibeSettings() && uidNotModified();
+      allow delete: if isOwner(userId);
+    }
+
+    match /users/{userId}/files/{fileId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUserFile() && uidUnchanged();
+      allow update: if isOwner(userId) && isValidUserFile() && uidNotModified() && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isOwner(userId);
+    }
+  }
+}
